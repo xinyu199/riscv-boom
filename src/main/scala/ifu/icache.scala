@@ -15,17 +15,19 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.random._
 import chisel3.internal.sourceinfo.{SourceInfo}
+import chisel3.experimental.{chiselName}
 
-import org.chipsalliance.cde.config.{Parameters}
+import freechips.rocketchip.config.{Parameters}
+import freechips.rocketchip.subsystem.{RocketTilesKey}
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tile._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
 import freechips.rocketchip.util.property._
 import freechips.rocketchip.rocket.{HasL1ICacheParameters, ICacheParams, ICacheErrors, ICacheReq}
-
-
-
+import freechips.rocketchip.diplomaticobjectmodel.logicaltree.{LogicalTreeNode}
+import freechips.rocketchip.diplomaticobjectmodel.DiplomaticObjectModelAddressing
+import freechips.rocketchip.diplomaticobjectmodel.model.{OMComponent, OMICache, OMECC}
 
 import boom.common._
 import boom.util.{BoomCoreStringPrefix}
@@ -49,6 +51,27 @@ class ICache(
 
   val size = icacheParams.nSets * icacheParams.nWays * icacheParams.blockBytes
   private val wordBytes = icacheParams.fetchBytes
+}
+class BoomICacheLogicalTreeNode(icache: ICache, deviceOpt: Option[SimpleDevice], params: ICacheParams) extends LogicalTreeNode(() => deviceOpt) {
+  override def getOMComponents(resourceBindings: ResourceBindings, children: Seq[OMComponent] = Nil): Seq[OMComponent] = {
+    Seq(
+      OMICache(
+        memoryRegions = DiplomaticObjectModelAddressing.getOMMemoryRegions("ITIM", resourceBindings),
+        interrupts = Nil,
+        nSets = params.nSets,
+        nWays = params.nWays,
+        blockSizeBytes = params.blockBytes,
+        dataMemorySizeBytes = params.nSets * params.nWays * params.blockBytes,
+        dataECC = params.dataECC.map(OMECC.fromString),
+        tagECC = params.tagECC.map(OMECC.fromString),
+        nTLBEntries = params.nTLBSets * params.nTLBWays,
+        nTLBSets = params.nTLBSets,
+        nTLBWays = params.nTLBWays,
+        maxTimSize = params.nSets * (params.nWays-1) * params.blockBytes,
+        memories = icache.module.asInstanceOf[ICacheModule].dataArrays.map(_._2)
+      )
+    )
+  }
 }
 
 /**
@@ -84,6 +107,9 @@ class ICacheBundle(val outer: ICache) extends BoomBundle()(outer.p)
   val perf = Output(new Bundle {
     val acquire = Bool()
   })
+
+  //Enable_PerfCounter_Support
+  val icache_valid_access = Output(Bool())
 }
 
 /**
@@ -102,6 +128,7 @@ object GetPropertyByHartId
  *
  * @param outer top level ICache class
  */
+@chiselName
 class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
   with HasBoomFrontendParameters
 {
@@ -125,7 +152,7 @@ class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
 
 
 
-  val s0_valid = io.req.fire
+  val s0_valid = io.req.fire()
   val s0_vaddr = io.req.bits.addr
 
   val s1_valid = RegNext(s0_valid)
@@ -137,14 +164,16 @@ class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
 
   val invalidated = Reg(Bool())
   val refill_valid = RegInit(false.B)
-  val refill_fire = tl_out.a.fire
+  val refill_fire = tl_out.a.fire()
   val s2_miss = s2_valid && !s2_hit && !RegNext(refill_valid)
   val refill_paddr = RegEnable(io.s1_paddr, s1_valid && !(refill_valid || s2_miss))
   val refill_tag = refill_paddr(tagBits+untagBits-1,untagBits)
   val refill_idx = refill_paddr(untagBits-1,blockOffBits)
-  val refill_one_beat = tl_out.d.fire && edge_out.hasData(tl_out.d.bits)
+  val refill_one_beat = tl_out.d.fire() && edge_out.hasData(tl_out.d.bits)
 
   io.req.ready := !refill_one_beat
+
+  io.icache_valid_access := s2_valid
 
   val (_, _, d_done, refill_cnt) = edge_out.count(tl_out.d)
   val refill_done = refill_one_beat && d_done
@@ -193,7 +222,7 @@ class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
       DescribedSRAM(
         name = s"dataArrayWay_${x}",
         desc = "ICache Data Array",
-        size = ramDepth,
+        size = nSets * refillCycles,
         data = UInt((wordBits).W)
       )
     }
@@ -203,21 +232,21 @@ class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
       DescribedSRAM(
         name = s"dataArrayB0Way_${x}",
         desc = "ICache Data Array",
-        size = ramDepth,
+        size = nSets * refillCycles,
         data = UInt((wordBits/nBanks).W)
       )} ++
     (0 until nWays).map { x =>
       DescribedSRAM(
         name = s"dataArrayB1Way_${x}",
         desc = "ICache Data Array",
-        size = ramDepth,
+        size = nSets * refillCycles,
         data = UInt((wordBits/nBanks).W)
       )}
   }
   if (nBanks == 1) {
     // Use unbanked icache for narrow accesses.
     s1_bankid := 0.U
-    for ((dataArray, i) <- dataArrays.zipWithIndex) {
+    for ((dataArray, i) <- dataArrays.map(_._1) zipWithIndex) {
       def row(addr: UInt) = addr(untagBits-1, blockOffBits-log2Ceil(refillCycles))
       val s0_ren = s0_valid
 
@@ -235,8 +264,8 @@ class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
     }
   } else {
     // Use two banks, interleaved.
-    val dataArraysB0 = dataArrays.take(nWays)
-    val dataArraysB1 = dataArrays.drop(nWays)
+    val dataArraysB0 = dataArrays.map(_._1).take(nWays)
+    val dataArraysB1 = dataArrays.map(_._1).drop(nWays)
     require (nBanks == 2)
 
     // Bank0 row's id wraps around if Bank1 is the starting bank.
@@ -333,7 +362,7 @@ class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
   tl_out.c.valid := false.B
   tl_out.e.valid := false.B
 
-  io.perf.acquire := tl_out.a.fire
+  io.perf.acquire := tl_out.a.fire()
 
   when (!refill_valid) { invalidated := false.B }
   when (refill_fire) { refill_valid := true.B }

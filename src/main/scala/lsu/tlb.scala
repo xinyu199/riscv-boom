@@ -3,7 +3,7 @@ package boom.lsu
 import chisel3._
 import chisel3.util._
 
-import org.chipsalliance.cde.config.Parameters
+import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.rocket._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.subsystem.{CacheBlockBytes}
@@ -181,7 +181,7 @@ class NBDTLB(instruction: Boolean, lgMaxSize: Int, cfg: TLBConfig)(implicit edge
     newEntry.c := cacheable(0)
     newEntry.u := pte.u
     newEntry.g := pte.g
-    newEntry.ae := io.ptw.resp.bits.ae_final
+    newEntry.ae := io.ptw.resp.bits.ae
     newEntry.sr := pte.sr()
     newEntry.sw := pte.sw()
     newEntry.sx := pte.sx()
@@ -311,7 +311,7 @@ class NBDTLB(instruction: Boolean, lgMaxSize: Int, cfg: TLBConfig)(implicit edge
   if (usingVM) {
     val sfence = io.sfence.valid
     for (w <- 0 until memWidth) {
-      when (io.req(w).fire && tlb_miss(w) && state === s_ready) {
+      when (io.req(w).fire() && tlb_miss(w) && state === s_ready) {
         state := s_request
         r_refill_tag := vpn(w)
 

@@ -14,7 +14,7 @@ package boom.exu
 import chisel3._
 import chisel3.util._
 
-import org.chipsalliance.cde.config.{Parameters}
+import freechips.rocketchip.config.{Parameters}
 import freechips.rocketchip.rocket
 import freechips.rocketchip.tile
 
@@ -53,6 +53,11 @@ class FpPipeline(implicit p: Parameters) extends BoomModule with tile.HasFPUPara
 
     val debug_tsc_reg    = Input(UInt(width=xLen.W))
     val debug_wb_wdata   = Output(Vec(numWakeupPorts, UInt((fLen+1).W)))
+
+    //get issue float uop number
+    val iss_fp_uops      = Output(UInt(4.W))
+    val exe_fp_uops      = Output(UInt(4.W))
+    val fp_iq_event_empty = Output(Bool())
   })
 
   //**********************************
@@ -72,9 +77,9 @@ class FpPipeline(implicit p: Parameters) extends BoomModule with tile.HasFPUPara
                          ))
   val fregister_read = Module(new RegisterRead(
                          issue_unit.issueWidth,
-                         exe_units.withFilter(_.readsFrf).map(_.supportedFuncUnits).toSeq,
+                         exe_units.withFilter(_.readsFrf).map(_.supportedFuncUnits),
                          exe_units.numFrfReadPorts,
-                         exe_units.withFilter(_.readsFrf).map(x => 3).toSeq,
+                         exe_units.withFilter(_.readsFrf).map(x => 3),
                          0, // No bypass for FP
                          0,
                          fLen+1))
@@ -87,6 +92,10 @@ class FpPipeline(implicit p: Parameters) extends BoomModule with tile.HasFPUPara
 
   val iss_valids = Wire(Vec(exe_units.numFrfReaders, Bool()))
   val iss_uops   = Wire(Vec(exe_units.numFrfReaders, new MicroOp()))
+
+  //get issue float uop number
+  io.iss_fp_uops := PopCount(iss_valids.asUInt)
+  io.fp_iq_event_empty := issue_unit.io.event_empty
 
   issue_unit.io.tsc_reg := io.debug_tsc_reg
   issue_unit.io.brupdate := io.brupdate
@@ -212,8 +221,8 @@ class FpPipeline(implicit p: Parameters) extends BoomModule with tile.HasFPUPara
 
   val fpiu_unit = exe_units.fpiu_unit
   val fpiu_is_sdq = fpiu_unit.io.ll_iresp.bits.uop.uopc === uopSTA
-  io.to_int.valid := fpiu_unit.io.ll_iresp.fire && !fpiu_is_sdq
-  io.to_sdq.valid := fpiu_unit.io.ll_iresp.fire &&  fpiu_is_sdq
+  io.to_int.valid := fpiu_unit.io.ll_iresp.fire() && !fpiu_is_sdq
+  io.to_sdq.valid := fpiu_unit.io.ll_iresp.fire() &&  fpiu_is_sdq
   io.to_int.bits  := fpiu_unit.io.ll_iresp.bits
   io.to_sdq.bits  := fpiu_unit.io.ll_iresp.bits
   fpiu_unit.io.ll_iresp.ready := io.to_sdq.ready && io.to_int.ready
@@ -266,6 +275,13 @@ class FpPipeline(implicit p: Parameters) extends BoomModule with tile.HasFPUPara
   for (w <- 0 until exe_units.length) {
     exe_units(w).io.req.bits.kill := io.flush_pipeline
   }
+
+  //get float exe uop number
+  val exe_fp_valids = Wire(Vec(exe_units.length, Bool()))
+  for (w <- 0 until exe_units.length) {
+    exe_fp_valids(w) := exe_units(w).io.req.valid
+  }
+  io.exe_fp_uops := PopCount(exe_fp_valids.asUInt)
 
   override def toString: String =
     (BoomCoreStringPrefix("===FP Pipeline===") + "\n"

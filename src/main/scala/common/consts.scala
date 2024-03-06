@@ -14,7 +14,7 @@ package boom.common.constants
 import chisel3._
 import chisel3.util._
 
-import org.chipsalliance.cde.config.Parameters
+import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.util.Str
 import freechips.rocketchip.rocket.RVCExpander
 
@@ -41,8 +41,54 @@ trait ScalarOpConstants
   val Y = BitPat("b1")
   val N = BitPat("b0")
 
-  //************************************
+  //--------------------------------------------------------
   // Extra Constants
+  // Enable_Sample_Support
+  val SetUCSR_ProcTag        = 1.U(12.W)
+  val SetUCSR_SampleFuncAddr = 2.U(12.W)
+  val SetUCSR_EventSel       = 3.U(12.W)
+  val SetUCSR_MaxEventNum    = 4.U(12.W)
+  val SetUCSR_WarmupInst     = 5.U(12.W)
+  val SetUCSR_MaxPriv        = 6.U(12.W)
+  val SetUCSR_PfcEnable      = 7.U(12.W)
+  val SetUCSR_SampleHappen   = 8.U(12.W)
+  
+  val SetUCSR_Temp1          = 9.U(12.W)
+  val SetUCSR_Temp2          = 10.U(12.W)
+  val SetUCSR_Temp3          = 11.U(12.W)
+  val SetUCSR_Temp4          = 12.U(12.W)
+  val SetUCSR_RcdSetting     = 13.U(12.W)
+
+  val GetUCSR_ProcTag       = 33.U(12.W)
+  val GetUCSR_SampleHappen  = 34.U(12.W)
+  val GetUCSR_ExitNPC       = 35.U(12.W)
+
+  val GetUCSR_Temp1         = 36.U(12.W)
+  val GetUCSR_Temp2         = 37.U(12.W)
+  val GetUCSR_Temp3         = 38.U(12.W)
+  val GetUCSR_Temp4         = 39.U(12.W)
+
+  //for testing
+  val GetUCSR_SampleFuncAddr  = 41.U(12.W)
+  val GetUCSR_MaxEvents     = 42.U(12.W)
+  val GetUCSR_NowEvents     = 43.U(12.W)
+  val GetUCSR_EventSel      = 44.U(12.W)
+  val GetUCSR_Maxpriv       = 45.U(12.W)
+
+  //special inst fuc
+  val SpecialInst_URet        = 64.U(12.W)
+  val SpecialInst_RstPFC      = 127.U(12.W)
+  
+  //special exception cause for sample happen
+  val Cause_OverFlow          = 17.U 
+
+
+  //record_entSelect  
+  val RcdEvent_AllMisBranch   = 0.U(8.W)
+  val RcdEvent_MisBr          = 1.U(8.W)
+  val RcdEvent_MisJr          = 2.U(8.W)
+
+  //--------------------------------------------------------
 
   // Which branch predictor predicted us
   val BSRC_SZ = 2
@@ -202,9 +248,9 @@ trait ScalarOpConstants
   //               =  66.U(UOPC_SZ.W)
   val uopAMO_AG    =  67.U(UOPC_SZ.W) // AMO-address gen (use normal STD for datagen)
 
-  val uopFMV_W_X   =  68.U(UOPC_SZ.W)
+  val uopFMV_S_X   =  68.U(UOPC_SZ.W)
   val uopFMV_D_X   =  69.U(UOPC_SZ.W)
-  val uopFMV_X_W   =  70.U(UOPC_SZ.W)
+  val uopFMV_X_S   =  70.U(UOPC_SZ.W)
   val uopFMV_X_D   =  71.U(UOPC_SZ.W)
 
   val uopFSGNJ_S   =  72.U(UOPC_SZ.W)

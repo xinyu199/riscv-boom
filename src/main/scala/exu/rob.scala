@@ -27,8 +27,9 @@ import scala.math.ceil
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.chiselName
 
-import org.chipsalliance.cde.config.Parameters
+import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.util.Str
 
 import boom.common._
@@ -147,6 +148,9 @@ class CommitExceptionSignals(implicit p: Parameters) extends BoomBundle
 // The ROB needs to tell the FTQ if there's a pipeline flush (and what type)
 // so the FTQ can drive the frontend with the correct redirected PC.
   val flush_typ  = FlushTypes()
+  //Enable_Sample_Support: for support uret
+  val isURet = Bool()
+  val uret_target = UInt(2.W)
 }
 
 /**
@@ -207,6 +211,7 @@ class DebugRobSignals(implicit p: Parameters) extends BoomBundle
  * @param numWakeupPorts number of wakeup ports to the ROB
  * @param numFpuPorts number of FPU units that will write back fflags
  */
+@chiselName
 class Rob(
   val numWakeupPorts: Int,
   val numFpuPorts: Int
@@ -298,8 +303,6 @@ class Rob(
   rob_debug_inst_mem.write(rob_tail, rob_debug_inst_wdata, rob_debug_inst_wmask)
   val rob_debug_inst_rdata = rob_debug_inst_mem.read(rob_head, will_commit.reduce(_||_))
 
-  val rob_fflags    = Seq.fill(coreWidth)(Reg(Vec(numRobRows, UInt(freechips.rocketchip.tile.FPConstants.FLAGS_SZ.W))))
-
   for (w <- 0 until coreWidth) {
     def MatchBank(bank_idx: UInt): Bool = (bank_idx === w.U)
 
@@ -310,6 +313,7 @@ class Rob(
     val rob_uop       = Reg(Vec(numRobRows, new MicroOp()))
     val rob_exception = Reg(Vec(numRobRows, Bool()))
     val rob_predicated = Reg(Vec(numRobRows, Bool())) // Was this instruction predicated out?
+    val rob_fflags    = Mem(numRobRows, Bits(freechips.rocketchip.tile.FPConstants.FLAGS_SZ.W))
 
     val rob_debug_wdata = Mem(numRobRows, UInt(xLen.W))
 
@@ -327,7 +331,7 @@ class Rob(
       rob_uop(rob_tail)       := io.enq_uops(w)
       rob_exception(rob_tail) := io.enq_uops(w).exception
       rob_predicated(rob_tail)   := false.B
-      rob_fflags(w)(rob_tail)    := 0.U
+      rob_fflags(rob_tail)    := 0.U
 
       assert (rob_val(rob_tail) === false.B, "[rob] overwriting a valid entry.")
       assert ((io.enq_uops(w).rob_idx >> log2Ceil(coreWidth)) === rob_tail)
@@ -378,7 +382,7 @@ class Rob(
     for (i <- 0 until numFpuPorts) {
       val fflag_uop = io.fflags(i).bits.uop
       when (io.fflags(i).valid && MatchBank(GetBankIdx(fflag_uop.rob_idx))) {
-        rob_fflags(w)(GetRowIdx(fflag_uop.rob_idx)) := io.fflags(i).bits.flags
+        rob_fflags(GetRowIdx(fflag_uop.rob_idx)) := io.fflags(i).bits.flags
       }
     }
 
@@ -479,7 +483,7 @@ class Rob(
     // Outputs
     rob_head_vals(w)     := rob_val(rob_head)
     rob_tail_vals(w)     := rob_val(rob_tail)
-    rob_head_fflags(w)   := rob_fflags(w)(rob_head)
+    rob_head_fflags(w)   := rob_fflags(rob_head)
     rob_head_uses_stq(w) := rob_uop(rob_head).uses_stq
     rob_head_uses_ldq(w) := rob_uop(rob_head).uses_ldq
 
@@ -566,8 +570,11 @@ class Rob(
   io.com_xcpt.bits.edge_inst := com_xcpt_uop.edge_inst
   io.com_xcpt.bits.is_rvc    := com_xcpt_uop.is_rvc
   io.com_xcpt.bits.pc_lob    := com_xcpt_uop.pc_lob
+  io.com_xcpt.bits.isURet    := false.B //Enable_Sample_Support: for support uret
+  io.com_xcpt.bits.uret_target := 0.U
 
-  val flush_commit_mask = Range(0,coreWidth).map{i => io.commit.valids(i) && io.commit.uops(i).flush_on_commit}
+  //Enable_Sample_Support: for support uret
+  val flush_commit_mask = Range(0,coreWidth).map{i => io.commit.valids(i) && (io.commit.uops(i).flush_on_commit || (io.commit.uops(i).ucsrInst && io.commit.uops(i).inst(31, 20) === SpecialInst_URet))}
   val flush_commit = flush_commit_mask.reduce(_|_)
   val flush_val = exception_thrown || flush_commit
 
@@ -582,6 +589,9 @@ class Rob(
   io.flush.bits.pc_lob    := flush_uop.pc_lob
   io.flush.bits.edge_inst := flush_uop.edge_inst
   io.flush.bits.is_rvc    := flush_uop.is_rvc
+  //Enable_Sample_Support: for support uret
+  io.flush.bits.isURet    := flush_uop.ucsrInst && flush_uop.inst(31, 20) === SpecialInst_URet
+  io.flush.bits.uret_target := flush_uop.lrs1(1,0)
   io.flush.bits.flush_typ := FlushTypes.getType(flush_val,
                                                 exception_thrown && !is_mini_exception,
                                                 flush_commit && flush_uop.uopc === uopERET,

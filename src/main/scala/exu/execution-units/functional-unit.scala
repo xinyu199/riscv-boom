@@ -18,8 +18,10 @@ package boom.exu
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.chiselName
 
-import org.chipsalliance.cde.config.Parameters
+import freechips.rocketchip.config.Parameters
+import freechips.rocketchip.rocket.ALU._
 import freechips.rocketchip.util._
 import freechips.rocketchip.tile
 import freechips.rocketchip.rocket.{PipelinedMultiplier,BP,BreakpointUnit,Causes,CSR}
@@ -277,6 +279,7 @@ abstract class PipelinedFunctionalUnit(
  * @param numStages how many pipeline stages does the functional unit have
  * @param dataWidth width of the data being operated on in the functional unit
  */
+@chiselName
 class ALUUnit(isJmpUnit: Boolean = false, numStages: Int = 1, dataWidth: Int)(implicit p: Parameters)
   extends PipelinedFunctionalUnit(
     numStages = numStages,
@@ -644,7 +647,7 @@ abstract class IterativeFunctionalUnit(dataWidth: Int)(implicit p: Parameters)
   val do_kill = Wire(Bool())
   do_kill := io.req.bits.kill // irrelevant default
 
-  when (io.req.fire) {
+  when (io.req.fire()) {
     // update incoming uop
     do_kill := IsKilledByBranch(io.brupdate, io.req.bits.uop) || io.req.bits.kill
     r_uop := io.req.bits.uop

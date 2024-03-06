@@ -8,10 +8,8 @@ package boom.exu
 import chisel3._
 import chisel3.util._
 
-import org.chipsalliance.cde.config.Parameters
+import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.rocket.Instructions._
-import freechips.rocketchip.rocket.Instructions32
-import freechips.rocketchip.rocket.CustomInstructions._
 import freechips.rocketchip.rocket.RVCExpander
 import freechips.rocketchip.rocket.{CSR,Causes}
 import freechips.rocketchip.util.{uintToBitPat,UIntIsOneOf}
@@ -109,12 +107,9 @@ object X32Decode extends DecodeConstants
             //     |  |  |  |         |        |        regtype |       |       |  |     |  |  |  |  |  cmd    |    |  |  |  |  flush on commit
             //     |  |  |  |         |        |        |       |       |       |  |     |  |  |  |  |  |      |    |  |  |  |  |  csr cmd
   val table: Array[(BitPat, List[BitPat])] = Array(//   |       |       |       |  |     |  |  |  |  |  |      |    |  |  |  |  |  |
-  Instructions32.SLLI ->
-              List(Y, N, X, uopSLLI , IQT_INT, FU_ALU , RT_FIX, RT_FIX, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 1.U, Y, N, N, N, N, CSR.N),
-  Instructions32.SRLI ->
-              List(Y, N, X, uopSRLI , IQT_INT, FU_ALU , RT_FIX, RT_FIX, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 1.U, Y, N, N, N, N, CSR.N),
-  Instructions32.SRAI ->
-              List(Y, N, X, uopSRAI , IQT_INT, FU_ALU , RT_FIX, RT_FIX, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 1.U, Y, N, N, N, N, CSR.N)
+  SLLI_RV32-> List(Y, N, X, uopSLLI , IQT_INT, FU_ALU , RT_FIX, RT_FIX, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 1.U, Y, N, N, N, N, CSR.N),
+  SRLI_RV32-> List(Y, N, X, uopSRLI , IQT_INT, FU_ALU , RT_FIX, RT_FIX, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 1.U, Y, N, N, N, N, CSR.N),
+  SRAI_RV32-> List(Y, N, X, uopSRAI , IQT_INT, FU_ALU , RT_FIX, RT_FIX, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 1.U, Y, N, N, N, N, CSR.N)
   )
 }
 
@@ -236,8 +231,8 @@ object XDecode extends DecodeConstants
   CSRRCI  -> List(Y, N, X, uopCSRRCI,IQT_INT, FU_CSR , RT_FIX, RT_PAS, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, Y, Y, CSR.C),
 
   SFENCE_VMA->List(Y,N, X, uopSFENCE,IQT_MEM, FU_MEM , RT_X  , RT_FIX, RT_FIX, N, IS_X, N, N, N, N, N,M_SFENCE,0.U,N, N, N, Y, Y, CSR.N),
-  ECALL   -> List(Y, N, X, uopERET  ,IQT_INT, FU_CSR , RT_X  , RT_X  , RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, Y, Y, Y, CSR.I),
-  EBREAK  -> List(Y, N, X, uopERET  ,IQT_INT, FU_CSR , RT_X  , RT_X  , RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, Y, Y, Y, CSR.I),
+  SCALL   -> List(Y, N, X, uopERET  ,IQT_INT, FU_CSR , RT_X  , RT_X  , RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, Y, Y, Y, CSR.I),
+  SBREAK  -> List(Y, N, X, uopERET  ,IQT_INT, FU_CSR , RT_X  , RT_X  , RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, Y, Y, Y, CSR.I),
   SRET    -> List(Y, N, X, uopERET  ,IQT_INT, FU_CSR , RT_X  , RT_X  , RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, Y, Y, CSR.I),
   MRET    -> List(Y, N, X, uopERET  ,IQT_INT, FU_CSR , RT_X  , RT_X  , RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, Y, Y, CSR.I),
   DRET    -> List(Y, N, X, uopERET  ,IQT_INT, FU_CSR , RT_X  , RT_X  , RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, Y, Y, CSR.I),
@@ -310,9 +305,9 @@ object FDecode extends DecodeConstants
   FCLASS_S-> List(Y, Y, Y, uopFCLASS_S,IQT_FP , FU_F2I, RT_FIX, RT_FLT, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, N, N, CSR.N),
   FCLASS_D-> List(Y, Y, N, uopFCLASS_D,IQT_FP , FU_F2I, RT_FIX, RT_FLT, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, N, N, CSR.N),
 
-  FMV_W_X -> List(Y, Y, Y, uopFMV_W_X, IQT_INT, FU_I2F, RT_FLT, RT_FIX, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, N, N, CSR.N),
+  FMV_S_X -> List(Y, Y, Y, uopFMV_S_X, IQT_INT, FU_I2F, RT_FLT, RT_FIX, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, N, N, CSR.N),
   FMV_D_X -> List(Y, Y, N, uopFMV_D_X, IQT_INT, FU_I2F, RT_FLT, RT_FIX, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, N, N, CSR.N),
-  FMV_X_W -> List(Y, Y, Y, uopFMV_X_W, IQT_FP , FU_F2I, RT_FIX, RT_FLT, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, N, N, CSR.N),
+  FMV_X_S -> List(Y, Y, Y, uopFMV_X_S, IQT_FP , FU_F2I, RT_FIX, RT_FLT, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, N, N, CSR.N),
   FMV_X_D -> List(Y, Y, N, uopFMV_X_D, IQT_FP , FU_F2I, RT_FIX, RT_FLT, RT_X  , N, IS_I, N, N, N, N, N, M_X  , 0.U, N, N, N, N, N, CSR.N),
 
   FSGNJ_S -> List(Y, Y, Y, uopFSGNJ_S, IQT_FP , FU_FPU, RT_FLT, RT_FLT, RT_FLT, N, IS_X, N, N, N, N, N, M_X  , 0.U, N, N, N, N, N, CSR.N),
@@ -490,7 +485,7 @@ class DecodeUnit(implicit p: Parameters) extends BoomModule
   val cs = Wire(new CtrlSigs()).decode(inst, decode_table)
 
   // Exception Handling
-  io.csr_decode.inst := inst
+  io.csr_decode.csr := inst(31,20)
   val csr_en = cs.csr_cmd.isOneOf(CSR.S, CSR.C, CSR.W)
   val csr_ren = cs.csr_cmd.isOneOf(CSR.S, CSR.C) && uop.lrs1 === 0.U
   val system_insn = cs.csr_cmd === CSR.I
@@ -596,7 +591,35 @@ class DecodeUnit(implicit p: Parameters) extends BoomModule
   //                       (uop.ldst === RA)
 
   //-------------------------------------------------------------
+  //Enable_Sample_Support:
+  val event_tag = WireInit(0.U(12.W))
+  event_tag := inst(31, 20)
+  val ucsrInst = (cs.uopc === uopADDI) && (inst(RD_MSB,RD_LSB) === 0.U)
+  val get_ucsr = ucsrInst && event_tag(11, 5) === 1.U   //32-63
+  uop.ucsrInst := ucsrInst
 
+  //Enable_PerfCounter_Support:
+  val readCounter = ucsrInst && event_tag(11, 7) === 1.U  //128 - 256
+  uop.readCounter := readCounter
+
+
+  val readRecorder = ucsrInst && event_tag(11, 11) === 1.U
+  uop.readRecorder := readRecorder
+
+  when (readCounter || get_ucsr || readRecorder) {
+    uop.ldst := inst(RS1_MSB,RS1_LSB)
+  }
+
+  when (ucsrInst) {
+    uop.is_unique := true.B
+  }
+
+  when (readCounter || readRecorder) {
+    uop.uopc := uopADDI
+    uop.imm_packed := 0.U
+  }
+
+  //-------------------------------------------------------------
   io.deq.uop := uop
 }
 
@@ -685,11 +708,7 @@ class BranchDecode(implicit p: Parameters) extends BoomModule
                SRL         -> List(N, N, N, Y, Y)
             ))
 
-  val cs_is_br = bpd_csignals(0)(0)
-  val cs_is_jal = bpd_csignals(1)(0)
-  val cs_is_jalr = bpd_csignals(2)(0)
-  val cs_is_shadowable = bpd_csignals(3)(0)
-  val cs_has_rs2 = bpd_csignals(4)(0)
+  val (cs_is_br: Bool) :: (cs_is_jal: Bool) :: (cs_is_jalr:Bool) :: (cs_is_shadowable:Bool) :: (cs_has_rs2) :: Nil = bpd_csignals
 
   io.out.is_call := (cs_is_jal || cs_is_jalr) && GetRd(io.inst) === RA
   io.out.is_ret  := cs_is_jalr && GetRs1(io.inst) === BitPat("b00?01") && GetRd(io.inst) === X0

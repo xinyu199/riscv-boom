@@ -17,7 +17,7 @@ import chisel3.util._
 import freechips.rocketchip.rocket.Instructions._
 import freechips.rocketchip.rocket._
 import freechips.rocketchip.util.{Str}
-import org.chipsalliance.cde.config.{Parameters}
+import freechips.rocketchip.config.{Parameters}
 import freechips.rocketchip.tile.{TileKey}
 
 import boom.common.{MicroOp}
@@ -446,7 +446,7 @@ class Compactor[T <: chisel3.Data](n: Int, k: Int, gen: T) extends Module
  * Assumption: enq.valid only high if not killed by branch (so don't check IsKilled on io.enq).
  */
 class BranchKillableQueue[T <: boom.common.HasBoomUOP](gen: T, entries: Int, flush_fn: boom.common.MicroOp => Bool = u => true.B, flow: Boolean = true)
-  (implicit p: org.chipsalliance.cde.config.Parameters)
+  (implicit p: freechips.rocketchip.config.Parameters)
   extends boom.common.BoomModule()(p)
   with boom.common.HasBoomCoreParameters
 {
@@ -472,7 +472,7 @@ class BranchKillableQueue[T <: boom.common.HasBoomUOP](gen: T, entries: Int, flu
   val ptr_match = enq_ptr.value === deq_ptr.value
   io.empty := ptr_match && !maybe_full
   val full = ptr_match && maybe_full
-  val do_enq = WireInit(io.enq.fire)
+  val do_enq = WireInit(io.enq.fire())
   val do_deq = WireInit((io.deq.ready || !valids(deq_ptr.value)) && !io.empty)
 
   for (i <- 0 until entries) {

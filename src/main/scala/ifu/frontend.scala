@@ -15,7 +15,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.internal.sourceinfo.{SourceInfo}
 
-import org.chipsalliance.cde.config._
+import freechips.rocketchip.config._
 import freechips.rocketchip.subsystem._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.rocket._
@@ -286,6 +286,17 @@ class BoomFrontendIO(implicit p: Parameters) extends BoomBundle
   val flush_icache = Output(Bool())
 
   val perf = Input(new FrontendPerfEvents)
+
+  ////Enable_PerfCounter_Support: for icache information
+  val itlb_valid_access = Input(Bool())
+  val itlb_hit = Input(Bool())
+  val icache_valid_access = Input(Bool())
+  val icache_hit = Input(Bool())
+  val bpsrc_f1 = Input(Bool())
+  val bpsrc_f2 = Input(Bool())
+  val bpsrc_f3 = Input(Bool())
+  val bpsrc_core = Input(Bool())
+  
 }
 
 /**
@@ -338,7 +349,7 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   icache.io.invalidate := io.cpu.flush_icache
   val tlb = Module(new TLB(true, log2Ceil(fetchBytes), TLBConfig(nTLBSets, nTLBWays)))
   io.ptw <> tlb.io.ptw
-  io.cpu.perf.tlbMiss := io.ptw.req.fire
+  io.cpu.perf.tlbMiss := io.ptw.req.fire()
   io.cpu.perf.acquire := icache.io.perf.acquire
 
   // --------------------------------------------------------
@@ -357,7 +368,13 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   val s0_replay_ppc  = Wire(UInt())
   val s0_s1_use_f3_bpd_resp = WireInit(false.B)
 
-
+  //Enable_PerfCounter_Support
+  io.cpu.icache_valid_access := icache.io.icache_valid_access
+  io.cpu.icache_hit := icache.io.resp.valid
+  io.cpu.bpsrc_f1 := s0_valid && (s0_tsrc === BSRC_1)
+  io.cpu.bpsrc_f2 := s0_valid && (s0_tsrc === BSRC_2)
+  io.cpu.bpsrc_f3 := s0_valid && (s0_tsrc === BSRC_3)
+  io.cpu.bpsrc_core := s0_valid && (s0_tsrc === BSRC_C)
 
 
   when (RegNext(reset.asBool) && !reset.asBool) {
@@ -390,8 +407,6 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   tlb.io.req.bits.vaddr := s1_vpc
   tlb.io.req.bits.passthrough := false.B
   tlb.io.req.bits.size  := log2Ceil(coreInstBytes * fetchWidth).U
-  tlb.io.req.bits.v     := io.ptw.status.v
-  tlb.io.req.bits.prv   := io.ptw.status.prv
   tlb.io.sfence         := RegNext(io.cpu.sfence)
   tlb.io.kill           := false.B
 
@@ -434,6 +449,9 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
     s0_ghist     := f1_predicted_ghist
     s0_is_replay := false.B
   }
+
+  io.cpu.itlb_valid_access := tlb.io.req.valid
+  io.cpu.itlb_hit := tlb.io.req.valid && !s1_tlb_miss
 
   // --------------------------------------------------------
   // **** ICache Response (F2) ****
@@ -541,7 +559,7 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   // RAS takes a cycle to read
   val ras_read_idx = RegInit(0.U(log2Ceil(nRasEntries).W))
   ras.io.read_idx := ras_read_idx
-  when (f3.io.enq.fire) {
+  when (f3.io.enq.fire()) {
     ras_read_idx := f3.io.enq.bits.ghist.ras_idx
     ras.io.read_idx := f3.io.enq.bits.ghist.ras_idx
   }
@@ -550,7 +568,7 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   // The BPD resp comes in f3
   f3_bpd_resp.io.enq.valid := f3.io.deq.valid && RegNext(f3.io.enq.ready)
   f3_bpd_resp.io.enq.bits  := bpd.io.resp.f3
-  when (f3_bpd_resp.io.enq.fire) {
+  when (f3_bpd_resp.io.enq.fire()) {
     bpd.io.f3_fire := true.B
   }
 
@@ -766,7 +784,7 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   f3_fetch_bundle.end_half.valid := bank_prev_is_half
   f3_fetch_bundle.end_half.bits  := bank_prev_half
 
-  when (f3.io.deq.fire) {
+  when (f3.io.deq.fire()) {
     f3_prev_is_half := bank_prev_is_half
     f3_prev_half    := bank_prev_half
     assert(f3_bpd_resp.io.deq.bits.pc === f3_fetch_bundle.pc)
@@ -842,7 +860,7 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
 
   // When f3 finds a btb mispredict, queue up a bpd correction update
   val f4_btb_corrections = Module(new Queue(new BranchPredictionUpdate, 2))
-  f4_btb_corrections.io.enq.valid := f3.io.deq.fire && f3_btb_mispredicts.reduce(_||_) && enableBTBFastRepair.B
+  f4_btb_corrections.io.enq.valid := f3.io.deq.fire() && f3_btb_mispredicts.reduce(_||_) && enableBTBFastRepair.B
   f4_btb_corrections.io.enq.bits  := DontCare
   f4_btb_corrections.io.enq.bits.is_mispredict_update := false.B
   f4_btb_corrections.io.enq.bits.is_repair_update     := false.B

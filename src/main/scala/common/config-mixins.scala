@@ -8,7 +8,7 @@ package boom.common
 import chisel3._
 import chisel3.util.{log2Up}
 
-import org.chipsalliance.cde.config.{Parameters, Config, Field}
+import freechips.rocketchip.config.{Parameters, Config, Field}
 import freechips.rocketchip.subsystem._
 import freechips.rocketchip.devices.tilelink.{BootROMParams}
 import freechips.rocketchip.diplomacy.{SynchronousCrossing, AsynchronousCrossing, RationalCrossing}
@@ -110,10 +110,10 @@ class WithNSmallBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends 
               fpu = Some(freechips.rocketchip.tile.FPUParams(sfmaLatency=4, dfmaLatency=4, divSqrt=true))
             ),
             dcache = Some(
-              DCacheParams(rowBits = 64, nSets=64, nWays=4, nMSHRs=2, nTLBWays=8)
+              DCacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=4, nMSHRs=2, nTLBWays=8)
             ),
             icache = Some(
-              ICacheParams(rowBits = 64, nSets=64, nWays=4, fetchBytes=2*4)
+              ICacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=4, fetchBytes=2*4)
             ),
             hartId = i + idOffset
           ),
@@ -121,6 +121,7 @@ class WithNSmallBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends 
         )
       } ++ prev
     }
+    case SystemBusKey => up(SystemBusKey, site).copy(beatBytes = 8)
     case XLen => 64
   })
 )
@@ -156,10 +157,10 @@ class WithNMediumBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends
               fpu = Some(freechips.rocketchip.tile.FPUParams(sfmaLatency=4, dfmaLatency=4, divSqrt=true))
             ),
             dcache = Some(
-              DCacheParams(rowBits = 64, nSets=64, nWays=4, nMSHRs=2, nTLBWays=8)
+              DCacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=4, nMSHRs=2, nTLBWays=8)
             ),
             icache = Some(
-              ICacheParams(rowBits = 64, nSets=64, nWays=4, fetchBytes=2*4)
+              ICacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=4, fetchBytes=2*4)
             ),
             hartId = i + idOffset
           ),
@@ -167,6 +168,7 @@ class WithNMediumBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends
         )
       } ++ prev
     }
+    case SystemBusKey => up(SystemBusKey, site).copy(beatBytes = 8)
     case XLen => 64
   })
 )
@@ -201,10 +203,10 @@ class WithNLargeBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends 
               fpu = Some(freechips.rocketchip.tile.FPUParams(sfmaLatency=4, dfmaLatency=4, divSqrt=true))
             ),
             dcache = Some(
-              DCacheParams(rowBits = 128, nSets=64, nWays=8, nMSHRs=4, nTLBWays=16)
+              DCacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=8, nMSHRs=4, nTLBWays=16)
             ),
             icache = Some(
-              ICacheParams(rowBits = 128, nSets=64, nWays=8, fetchBytes=4*4)
+              ICacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=8, fetchBytes=4*4)
             ),
             hartId = i + idOffset
           ),
@@ -212,6 +214,7 @@ class WithNLargeBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends 
         )
       } ++ prev
     }
+    case SystemBusKey => up(SystemBusKey, site).copy(beatBytes = 16)
     case XLen => 64
   })
 )
@@ -248,10 +251,10 @@ class WithNMegaBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends C
               fpu = Some(freechips.rocketchip.tile.FPUParams(sfmaLatency=4, dfmaLatency=4, divSqrt=true))
             ),
             dcache = Some(
-              DCacheParams(rowBits = 128, nSets=64, nWays=8, nMSHRs=8, nTLBWays=32)
+              DCacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=8, nMSHRs=8, nTLBWays=32)
             ),
             icache = Some(
-              ICacheParams(rowBits = 128, nSets=64, nWays=8, fetchBytes=4*4)
+              ICacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=8, fetchBytes=4*4)
             ),
             hartId = i + idOffset
           ),
@@ -259,6 +262,7 @@ class WithNMegaBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends C
         )
       } ++ prev
     }
+    case SystemBusKey => up(SystemBusKey, site).copy(beatBytes = 16)
     case XLen => 64
   })
 )
@@ -295,10 +299,10 @@ class WithNGigaBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends C
               fpu = Some(freechips.rocketchip.tile.FPUParams(sfmaLatency=4, dfmaLatency=4, divSqrt=true))
             ),
             dcache = Some(
-              DCacheParams(rowBits = 128, nSets=64, nWays=8, nMSHRs=8, nTLBWays=32)
+              DCacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=8, nMSHRs=8, nTLBWays=32)
             ),
             icache = Some(
-              ICacheParams(rowBits = 128, nSets=64, nWays=8, fetchBytes=4*4)
+              ICacheParams(rowBits = site(SystemBusKey).beatBits, nSets=64, nWays=8, fetchBytes=4*4)
             ),
             hartId = i + idOffset
           ),
@@ -306,29 +310,10 @@ class WithNGigaBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends C
         )
       } ++ prev
     }
+    case SystemBusKey => up(SystemBusKey, site).copy(beatBytes = 16)
     case XLen => 64
   })
 )
-
-class WithCloneBoomTiles(
-  n: Int = 1,
-  cloneTileId: Int = 0,
-  overrideIdOffset: Option[Int] = None,
-  location: HierarchicalLocation = InSubsystem,
-  cloneLocation: HierarchicalLocation = InSubsystem
-) extends Config((site, here, up) => {
-  case TilesLocated(`location`) => {
-    val prev = up(TilesLocated(location), site)
-    val idOffset = overrideIdOffset.getOrElse(prev.size)
-    val tileAttachParams = up(TilesLocated(cloneLocation)).find(_.tileParams.hartId == cloneTileId)
-      .get.asInstanceOf[BoomTileAttachParams]
-    (0 until n).map { i =>
-      CloneTileAttachParams(cloneTileId, tileAttachParams.copy(
-        tileParams = tileAttachParams.tileParams.copy(hartId = i + idOffset)
-      ))
-    } ++ prev
-  }
-})
 
 /**
   * BOOM Configs for CS152 lab
@@ -366,7 +351,7 @@ class WithNCS152BaselineBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) 
                 // DO NOT CHANGE ABOVE
             ),
             dcache = Some(DCacheParams(
-              rowBits=64,
+              rowBits=site(SystemBusKey).beatBytes*8,
               nSets=64, // CS152: Change me (must be pow2, 2-64)
               nWays=4,  // CS152: Change me (1-8)
               nMSHRs=2  // CS152: Change me (1+)
@@ -377,6 +362,7 @@ class WithNCS152BaselineBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) 
         )
       } ++ prev
     }
+    case SystemBusKey => up(SystemBusKey, site).copy(beatBytes = 8)
     case XLen => 64
   })
 )
@@ -415,7 +401,7 @@ class WithNCS152DefaultBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) e
                 // DO NOT CHANGE ABOVE
             ),
             dcache = Some(DCacheParams(
-              rowBits=64,
+              rowBits=site(SystemBusKey).beatBytes*8,
               nSets=64, // CS152: Change me (must be pow2, 2-64)
               nWays=4,  // CS152: Change me (1-8)
               nMSHRs=2  // CS152: Change me (1+)
@@ -426,6 +412,7 @@ class WithNCS152DefaultBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) e
         )
       } ++ prev
     }
+    case SystemBusKey => up(SystemBusKey, site).copy(beatBytes = 8)
     case XLen => 64
   })
 )
